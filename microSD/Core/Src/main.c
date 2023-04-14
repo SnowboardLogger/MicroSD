@@ -22,7 +22,8 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include "stdio.h"
+#include "stdbool.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -40,6 +41,8 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+UART_HandleTypeDef hlpuart1;
+
 SPI_HandleTypeDef hspi1;
 
 /* USER CODE BEGIN PV */
@@ -50,13 +53,75 @@ SPI_HandleTypeDef hspi1;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_SPI1_Init(void);
+static void MX_LPUART1_UART_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-
+void process_SD_card( void )
+{
+  FATFS       FatFs;                //Fatfs handle
+  FIL         fil;                  //File handle
+  FRESULT     fres;                 //Result after operations
+  char        buf[100];
+  do
+  {
+    //Mount the SD Card
+    fres = f_mount(&FatFs, "", 1);    //1=mount now
+    if (fres != FR_OK)
+    {
+      printf("No SD Card found : (%i)\r\n", fres);
+      break;
+    }
+    printf("SD Card Mounted Successfully!!!\r\n");
+    //Read the SD Card Total size and Free Size
+    FATFS *pfs;
+    DWORD fre_clust;
+    uint32_t totalSpace, freeSpace;
+    f_getfree("", &fre_clust, &pfs);
+    totalSpace = (uint32_t)((pfs->n_fatent - 2) * pfs->csize * 0.5);
+    freeSpace = (uint32_t)(fre_clust * pfs->csize * 0.5);
+    printf("TotalSpace : %lu bytes, FreeSpace = %lu bytes\n", totalSpace, freeSpace);
+    //Open the file
+    fres = f_open(&fil, "EmbeTronicX.txt", FA_WRITE | FA_READ | FA_CREATE_ALWAYS);
+    if(fres != FR_OK)
+    {
+      printf("File creation/open Error : (%i)\r\n", fres);
+      break;
+    }
+    printf("Writing data!!!\r\n");
+    //write the data
+    f_puts("Welcome to EmbeTronicX", &fil);
+    //close your file
+    f_close(&fil);
+    //Open the file
+    fres = f_open(&fil, "EmbeTronicX.txt", FA_READ);
+    if(fres != FR_OK)
+    {
+      printf("File opening Error : (%i)\r\n", fres);
+      break;
+    }
+    //read the data
+    f_gets(buf, sizeof(buf), &fil);
+    printf("Read Data : %s\n", buf);
+    //close your file
+    f_close(&fil);
+    printf("Closing File!!!\r\n");
+#if 0
+    //Delete the file.
+    fres = f_unlink(EmbeTronicX.txt);
+    if (fres != FR_OK)
+    {
+      printf("Cannot able to delete the file\n");
+    }
+#endif
+  } while( false );
+  //We're done, so de-mount the drive
+  f_mount(NULL, "", 0);
+  printf("SD Card Unmounted Successfully!!!\r\n");
+}
 /* USER CODE END 0 */
 
 /**
@@ -89,6 +154,7 @@ int main(void)
   MX_GPIO_Init();
   MX_SPI1_Init();
   MX_FATFS_Init();
+  MX_LPUART1_UART_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -100,6 +166,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	  process_SD_card();
   }
   /* USER CODE END 3 */
 }
@@ -155,6 +222,40 @@ void SystemClock_Config(void)
 }
 
 /**
+  * @brief LPUART1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_LPUART1_UART_Init(void)
+{
+
+  /* USER CODE BEGIN LPUART1_Init 0 */
+
+  /* USER CODE END LPUART1_Init 0 */
+
+  /* USER CODE BEGIN LPUART1_Init 1 */
+
+  /* USER CODE END LPUART1_Init 1 */
+  hlpuart1.Instance = LPUART1;
+  hlpuart1.Init.BaudRate = 115200;
+  hlpuart1.Init.WordLength = UART_WORDLENGTH_8B;
+  hlpuart1.Init.StopBits = UART_STOPBITS_1;
+  hlpuart1.Init.Parity = UART_PARITY_NONE;
+  hlpuart1.Init.Mode = UART_MODE_TX_RX;
+  hlpuart1.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+  hlpuart1.Init.OneBitSampling = UART_ONE_BIT_SAMPLE_DISABLE;
+  hlpuart1.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_NO_INIT;
+  if (HAL_UART_Init(&hlpuart1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN LPUART1_Init 2 */
+
+  /* USER CODE END LPUART1_Init 2 */
+
+}
+
+/**
   * @brief SPI1 Initialization Function
   * @param None
   * @retval None
@@ -202,6 +303,8 @@ static void MX_SPI1_Init(void)
 static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
+/* USER CODE BEGIN MX_GPIO_Init_1 */
+/* USER CODE END MX_GPIO_Init_1 */
 
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
@@ -210,14 +313,6 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(LD3_GPIO_Port, LD3_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin : VCP_TX_Pin */
-  GPIO_InitStruct.Pin = VCP_TX_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
-  GPIO_InitStruct.Alternate = GPIO_AF7_USART2;
-  HAL_GPIO_Init(VCP_TX_GPIO_Port, &GPIO_InitStruct);
 
   /*Configure GPIO pin : VCP_RX_Pin */
   GPIO_InitStruct.Pin = VCP_RX_Pin;
@@ -234,9 +329,22 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(LD3_GPIO_Port, &GPIO_InitStruct);
 
+/* USER CODE BEGIN MX_GPIO_Init_2 */
+/* USER CODE END MX_GPIO_Init_2 */
 }
 
 /* USER CODE BEGIN 4 */
+
+#ifdef __GNUC__
+#define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
+#else
+  #define PUTCHAR_PROTOTYPE int fputc(int ch, FILE *f)
+#endif /* __GNUC__ */
+PUTCHAR_PROTOTYPE
+{
+  HAL_UART_Transmit(&hlpuart1, (uint8_t *)&ch, 1, 0xFFFF);
+  return ch;
+}
 
 /* USER CODE END 4 */
 
